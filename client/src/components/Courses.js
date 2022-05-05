@@ -1,57 +1,46 @@
-import React, { Component } from 'react';
-import { Link } from 'react-router-dom';
-
-import Course from './Course';
+import React, { Component, Fragment } from 'react';
+import CourseList from './subcomponents/CourseList';
+import NewCourseButton from './subcomponents/NewCourseButton';
 
 export default class Courses extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      courses: [],
-      loading: false,
-    };
+      courses: []
+    }
+
+    this.getCourses();
   }
 
-  //on component mount retrieves courses data from API
-  componentDidMount() {
-    this.setState({ loading: true });
-    fetch('http://localhost:5000/api/courses/')
-      .then(response => {
-        if (response.status === 500) {
-          this.props.history.push('/error');
-        } else if (response.status === 404 ) {
-          this.props.history.push('/notfound');
-        } else {
-            return response.json()
-        }
-      })        
-      .then(data => this.setState( {
-        courses: data.courses,
-        loading: false
-      }))
-      .catch((err) => {
-        console.log('Error fetching and parsing data', err);
-      });
+  async getCourses() {
+    try {
+      const { context } = this.props;
+      const { data: courses } = await context.data.getCourses();
+      this.setState({ courses });
+    } catch (err) {
+      console.log(err);
+      this.props.history.push('/error');
+    }
   }
-
-
+  
   render() {
-    let courses = this.state.courses.map((course) => {
-      return <Course key ={`${course.id}`} id={`${course.id}`} title={`${course.title}`} />
-    });
+    const { courses } = this.state;
+    const { authenticatedUser } = this.props.context;
 
     return (
-      <div className="wrap main--grid">
-        {(this.state.loading) ? 
-        <div className="loader">Loading...</div> : <React.Fragment> {courses} </React.Fragment>} 
-        <Link className="course--module course--add--module" to="/courses/create">
-          <span className="course--add--title">
-            <svg version="1.1" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px"
-            viewBox="0 0 13 13" className="add"><polygon points="7,6 7,0 6,0 6,6 0,6 0,7 6,7 6,13 7,13 7,7 13,7 13,6 "></polygon></svg>
-            New Course
-          </span>
-        </Link>
+      <div className="container-fluid">
+      {
+        courses ?
+          <div className="row">
+            <CourseList courses={courses} />
+            <NewCourseButton authenticatedUser={authenticatedUser} />
+          </div>
+          
+        :
+          <Fragment>Loading</Fragment>
+      }
       </div>
     );
   }
+  
 }

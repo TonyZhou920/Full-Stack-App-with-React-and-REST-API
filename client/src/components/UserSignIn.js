@@ -1,76 +1,91 @@
-import React, { Component } from 'react';
+import React, { Component, Fragment } from 'react';
 import { Link } from 'react-router-dom';
+import UserForm from './subcomponents/UserForm';
 
 export default class UserSignIn extends Component {
   constructor(props) {
-		super(props);
+    super(props);
     this.state = {
       emailAddress: '',
       password: '',
       errors: []
     }
-    this.handleChange = this.handleChange.bind(this);
-    this.handleSubmit = this.handleSubmit.bind(this);
+  }
+  
+  change = (e) => {
+    const name = e.target.name;
+    const value = e.target.value;
+    this.setState({ [name]: value });
   }
 
-  handleChange(event) {
-    const name = event.target.name;
-    const value = event.target.value;
+  // submits request to Context's SignIn()
+  submit = async () => {
+    try {
+      const { context } = this.props;
+      const { from } = this.props.location.state || { from: { pathname: '/' } };
+      const { emailAddress, password } = this.state;
+      const user = await context.actions.signIn(emailAddress, password);
 
-    this.setState(() => {
-      return {
-        [name]: value
-      };
-    });
-  }
-
-  handleSubmit(event) {
-    event.preventDefault()
-
-    const { context } = this.props;
-    const { from } = this.props.location.state || { from: { pathname: "/" } };
-    const { emailAddress, password } = this.state;
-
-    context.actions.signIn(emailAddress, password)
-      .then((user) => {
-        if (user === null) {
-          this.setState(() => {
-            return { errors: ['Sign-in was unsuccessful. Please try again.']};
-          }); 
-        } else {
-          this.props.history.push(from); //returns user to previous location after redirected signin.
-        }
-      }) 
-      .catch((error) => {
-        console.log(error);
-      });
+      // If there is a user, sign them in.  Otherwise, display error
+      if (user !== null) {
+        console.log(`SUCCESS! ${emailAddress} is now signed in!`);
+        this.props.history.push(from);
+      } else {
+        this.setState({ errors: [ 'Sign-in was unsuccessful' ] });
+      }
+    } catch(err) {
+      console.log(err);
+      this.props.history.push('/error');
     }
+  }
+
+  cancel = () => {
+    this.props.history.push('/');
+  }
 
   render() {
+    const {
+      emailAddress,
+      password,
+      errors,
+    } = this.state;
+
     return (
-      <div className="form--centered">
-        <h2>Sign In</h2>
-        {(this.state.errors.length) ?
-          (<div className="validation--errors">
-              <h3>Validation Errors</h3>
-              <ul>
-                {this.state.errors.map((error, i) => <li key={i}>{error}</li>)}
-              </ul>
-            </div>
-          ): (null)}
-        <form onSubmit={this.handleSubmit}>
-          <label htmlFor="emailAddress">Email Address</label>
-          <input id="emailAddress" name="emailAddress" type="email" placeholder="Email Address" onChange={this.handleChange}></input>
-          <label htmlFor="password">Password</label>
-          <input id="password" name="password" type="password" placeholder="Password" onChange={this.handleChange}></input>
-          <button className="button" type="submit">Sign In</button><Link className="button button-secondary" to='/'>Cancel</Link>
-        </form>
-        <p>Don't have a user account? Click here to <Link to="/signup">sign up</Link>!</p>
-        
+      
+      <div className="container">
+        <div className="col-md-6 offset-md-3 text-center signin">
+          <h1>Sign In</h1>
+          <UserForm 
+            cancel={this.cancel}
+            errors={errors}
+            submit={this.submit}
+            submitButtonText="Sign In"
+            inputFields={() => (
+              <Fragment>
+                <input 
+                  id="emailAddress" 
+                  name="emailAddress" 
+                  type="text" 
+                  placeholder="Email Address" 
+                  value={emailAddress}
+                  onChange={this.change}
+                />
+                <input 
+                  id="password" 
+                  name="password" 
+                  type="password" 
+                  placeholder="Password" 
+                  value={password}
+                  onChange={this.change}
+                />
+              </Fragment>
+            )}
+          />
+
+          <p>Don't have a user account? <Link to="/signup">Click here</Link> to sign up!</p>
+        </div>
       </div>
-    );
-  }
-
-
-
+   );
+  }  
+  
 }

@@ -1,133 +1,156 @@
-import React, { Component } from 'react';
-import { Link } from 'react-router-dom';
+import React, { Component, Fragment } from 'react';
+import CourseForm from './subcomponents/CourseForm';
 
 export default class UpdateCourse extends Component {
   constructor(props) {
-		super(props);
-		this.state = {
-      courseTitle: '',
-      coursedescription: '',
+    super(props);
+    this.state = {
+      currentCourse: {},
+      currentCourseOwner: {},
+      title: '',
+      description: '',
       estimatedTime: '',
       materialsNeeded: '',
-      userId: '',
       errors: [],
-		  loading: false,
-		};
-
-    this.handleChange = this.handleChange.bind(this);
-    this.handleUpdate = this.handleUpdate.bind(this);
-  }
-
-  componentDidMount() {
-    const { context } = this.props;
-    const user = context.authenticatedUser;
-
-		this.setState({ loading: true });
-		fetch(`http://localhost:5000/api/courses/${this.props.match.params.id}`)
-		  .then(response => response.json())
-		  .then(data => {
-        this.setState( {
-        courseTitle: data.course.title,
-        courseDescription: data.course.description,
-        estimatedTime: data.course.estimatedTime,
-        materialsNeeded: data.course.materialsNeeded,
-        userId: data.course.user.id,
-			  loading: false
-		    });
-        if (user.userId !== this.state.userId) {
-          this.props.history.replace('/forbidden'); //replace used so user can't navigate back to same forbidden page. 
-        }
-      })
-		  .catch((err) => {
-        console.log('Error fetching and parsing data', err);
-        this.props.history.push('/notfound');
-      });
-  }
-
-  handleChange(event) {
-    const name = event.target.name;
-    const value = event.target.value;
-
-    this.setState(() => {
-      return {
-        [name]: value
-      };
-    });
-  }
-
-  handleUpdate(event) {
-    event.preventDefault()
-
-    const { context } = this.props;
-    const user = context.authenticatedUser;
-
-    const { 
-      courseTitle,
-      courseDescription,
-      estimatedTime,
-      materialsNeeded
-    } = this.state;
-
-    //create course
-    const course = {
-      title: courseTitle,
-      description: courseDescription,
-      estimatedTime,
-      materialsNeeded,
-      userId: user.userId,
     }
 
-    //set url path
-    const path = "/courses/" + this.props.match.params.id;
+    this.getCourse();
+  }
 
-    context.data.updateCourse(path, course, user.emailAddress, user.password)
-      .then((errors) => {
-        if (errors.length) {
-          this.setState( {errors} );
-        } else {
-            this.props.history.push(`/courses/${this.props.match.params.id}`);
-        }
-      }) 
-      .catch((error) => {
-        console.log(error);
-      });
+  checkPermissions() {
+    const { currentCourseOwner } = this.state;
+    const { authenticatedUser } = this.props.context;
+    if (authenticatedUser.id !== currentCourseOwner.id) {
+      this.props.history.push('/forbidden');
+    }
+  }
+
+  async getCourse() {
+    try {
+      const { id } = this.props.match.params;
+      const { context } = this.props;
+      const response = await context.data.getCourse(id);
+
+      if (response.status === 200) {
+        const currentCourse = response.data;
+        this.setState({ 
+          currentCourse, 
+          currentCourseOwner: currentCourse.User,
+          title: currentCourse.title,
+          description: currentCourse.description,
+          estimatedTime: currentCourse.estimatedTime,
+          materialsNeeded: currentCourse.materialsNeeded
+        });
+        this.checkPermissions();
+      } else if (response.status === 404) {
+        this.props.history.push('/notfound');
+      }
+      
+    } catch(err) {
+      console.log(err);
+    }
+  }
+
+
+  change = (e) => {
+    const name = e.target.name;
+    const value = e.target.value;
+    this.setState({ [name]: value });
+  }
+
+  submit = async () => {
+    try {
+      const { context, match } = this.props;
+      const {
+        title,
+        description,
+        estimatedTime,
+        materialsNeeded
+      } = this.state; 
+
+      const { emailAddress, password, id: userId } = context.authenticatedUser; 
+
+      // New course payload
+      const course = {
+        title,
+        description,
+        estimatedTime,
+        materialsNeeded,      
+        emailAddress,
+        password,
+        userId,
+        id: match.params.id
+      };
+
+      const response = await context.data.updateCourse(course, emailAddress, password);
+
+      // Successful course update
+      if (response.status === 204) {
+        console.log('updated!', response);
+        this.props.history.push('/');  
+        // Validation Errors
+      } else if (response.status === 400) {
+        console.log('Uh oh', response);
+        this.handleErrors(response.errors);
+      } 
+    } catch(err) {
+      console.log(err);
+      this.props.history.push('/error');
+    }
+  }
+
+  handleErrors(err) {
+    const errors = Object.values(err)[0]
+      .map(item => Object.values(item)[0]);
+    this.setState({ errors });
+  }
+
+  cancel = () => {
+    const { id } =  this.state.currentCourse ;
+    this.props.history.push(`/courses/${id}/view`);
   }
 
   render() {
+    
+    const { change, submit, cancel } = this;  
+    const {
+      title,
+      description,
+      estimatedTime,
+      materialsNeeded,
+      errors,
+      currentCourseOwner
+    } = this.state;
+
     return (
-      <div className="wrap">
-        <h2>Update Course</h2>
-        {(this.state.errors.length) ?
-          (<div className="validation--errors">
-              <h3>Validation Errors</h3>
-              <ul>
-                {this.state.errors.map((error, i) => <li key={i}>{error}</li>)}
-              </ul>
-            </div>
-          ): (null)}
-        <form>
-          <div className="main--flex">
-            <div>
-              <label htmlFor="courseTitle">Course Title</label>
-              <input id="courseTitle" name="courseTitle" type="text" value={this.state.courseTitle} onChange={this.handleChange}></input>
+      <div className="container-fluid course--detail">
+      {
+        currentCourseOwner.hasOwnProperty("id") ?
+          <Fragment>
+            <h1>Update Course</h1>
 
-              <p>{`By ${this.props.context.authenticatedUser.firstName} ${this.props.context.authenticatedUser.lastName}`}</p>
+            <CourseForm 
+              change={change}
+              submit={submit}
+              cancel={cancel}
+              title={title}
+              description={description}
+              estimatedTime={estimatedTime}
+              materialsNeeded={materialsNeeded}
+              errors={errors}
+              submitButtonText="Update Course"
+              courseOwnerName={`${currentCourseOwner.firstName} ${currentCourseOwner.lastName}`}
+            />
+          </Fragment>
 
-              <label htmlFor="courseDescription">Course Description</label>
-              <textarea id="courseDescription" name="courseDescription" value={this.state.courseDescription} onChange={this.handleChange}></textarea>
-            </div>
-            <div>
-              <label htmlFor="estimatedTime">Estimated Time</label>
-              <input id="estimatedTime" name="estimatedTime" type="text" value={this.state.estimatedTime} onChange={this.handleChange}></input>
-
-              <label htmlFor="materialsNeeded">Materials Needed</label>
-              <textarea id="materialsNeeded" name="materialsNeeded" value= {this.state.materialsNeeded} onChange={this.handleChange}></textarea>
-            </div>
-          </div>
-          <button className="button" type="submit" onClick={this.handleUpdate}>Update Course</button><Link className="button button-secondary" to={`/courses/${this.props.match.params.id}`}>Cancel</Link>
-      </form>
-    </div>
+        :
+          <Fragment>Loading</Fragment>
+      }
+      </div>
+      
+            
+       
     );
+    
   }
-
 }
